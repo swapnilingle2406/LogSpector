@@ -1,4 +1,5 @@
 # LogSpector
+Live demo: https://log-spector.vercel.app
 
 A web-based log analysis dashboard for security analysts. Paste or upload raw logs, get parsed results, threat-intel enrichment, and exportable reports.
 
