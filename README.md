@@ -1,6 +1,6 @@
 # LogSpector
 Live demo: https://log-spector.vercel.app
-<img width="1127" height="633" alt="image" src="https://github.com/user-attachments/assets/d941601e-2775-4539-a7f3-f453ed71d8ae" />
+<img width="1104" height="630" alt="image" src="https://github.com/user-attachments/assets/4b38cbe9-1959-4a69-8039-f41ab41f044c" />
 
 
 A web-based log analysis dashboard for security analysts. Paste or upload raw logs, get parsed results, threat-intel enrichment, and exportable reports.
