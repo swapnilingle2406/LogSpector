@@ -13,8 +13,10 @@ export default function App() {
   const [form, setForm] = useState({ email: '', password: '' });
   const [logs, setLogs] = useState('');
   const [filename, setFilename] = useState('');
+  const [fileKey, setFileKey] = useState(0);
   const [result, setResult] = useState(null);
   const [history, setHistory] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
   const [search, setSearch] = useState('');
   const [onlyBad, setOnlyBad] = useState(false);
   const [error, setError] = useState('');
@@ -41,6 +43,14 @@ export default function App() {
     const f = e.target.files[0]; if (!f) return;
     setFilename(f.name);
     const r = new FileReader(); r.onload = () => setLogs(r.result); r.readAsText(f);
+  };
+
+  // Empties the log box and resets the file picker so the same file can be chosen again
+  const clearLogs = () => {
+    setLogs('');
+    setFilename('');
+    setError('');
+    setFileKey((k) => k + 1);
   };
 
   const analyze = async () => {
@@ -102,8 +112,13 @@ export default function App() {
 
       <div className="card">
         <h2>Analyze logs</h2>
-        <input type="file" accept=".txt,.log,.json,.csv" onChange={onFile} />
-        <textarea placeholder="...or paste logs here" value={logs} onChange={(e) => setLogs(e.target.value)} />
+        <input key={fileKey} type="file" accept=".txt,.log,.json,.csv" onChange={onFile} />
+        <div className="logbox">
+          <textarea placeholder="...or paste logs here" value={logs} onChange={(e) => setLogs(e.target.value)} />
+          {logs && (
+            <button className="clear-btn" onClick={clearLogs} title="Clear logs" aria-label="Clear logs">×</button>
+          )}
+        </div>
         {error && <div className="err">{error}</div>}
         <button onClick={analyze} disabled={loading || !logs.trim()}>{loading ? 'Analyzing...' : 'Analyze'}</button>
       </div>
@@ -139,14 +154,33 @@ export default function App() {
         </div>
       </>)}
 
-      <div className="card"><h2>History</h2>
-        {history.length === 0 && <span style={{ color: '#7f9a88' }}>No analyses yet.</span>}
-        {history.map((h) => (
-          <div key={h._id} className="row" style={{ marginBottom: 6, alignItems: 'center' }}>
-            <span>{h.filename} - {h.format} - {h.total} entries - {new Date(h.createdAt).toLocaleString()}</span>
-            <span><button className="ghost" onClick={() => setResult(h)}>Open</button>
-              <button className="ghost" onClick={async () => { await axios.delete(`${API}/api/history/${h._id}`, cfg); loadHistory(); }}>Delete</button></span>
-          </div>))}
+      <div className="card">
+        <div className="history-head">
+          <h2>History ({history.length})</h2>
+          <button
+            className={`toggle-btn ${showHistory ? 'open' : ''}`}
+            onClick={() => setShowHistory(!showHistory)}
+            title={showHistory ? 'Hide history' : 'Show history'}
+            aria-label={showHistory ? 'Hide history' : 'Show history'}
+          >
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 8v8M8 12l4 4 4-4" />
+            </svg>
+          </button>
+        </div>
+        {showHistory && (
+          <div className="history-list">
+            {history.length === 0 && <span style={{ color: '#7f9a88' }}>No analyses yet.</span>}
+            {history.map((h) => (
+              <div key={h._id} className="row" style={{ marginBottom: 6, alignItems: 'center' }}>
+                <span>{h.filename} - {h.format} - {h.total} entries - {new Date(h.createdAt).toLocaleString()}</span>
+                <span><button className="ghost" onClick={() => setResult(h)}>Open</button>
+                  <button className="ghost" onClick={async () => { await axios.delete(`${API}/api/history/${h._id}`, cfg); loadHistory(); }}>Delete</button></span>
+              </div>))}
+          </div>
+        )}
       </div>
     </div>
   );
