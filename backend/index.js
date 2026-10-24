@@ -9,6 +9,7 @@ const os = require('os');
 const path = require('path');
 const { execFile } = require('child_process'); // execFile is safer than exec (no shell injection)
 const rateLimit = require('express-rate-limit');
+const { detectAnomalies } = require('./anomaly');
 const User = require('./models/User');
 const Analysis = require('./models/Analysis');
 
@@ -107,9 +108,10 @@ app.post('/api/analyze', auth, (req, res) => {
         const bad = new Set(intel.filter((i) => i.suspicious).map((i) => i.ip));
         const statusCounts = {};
         parsed.entries.forEach((e) => { if (e.status) statusCounts[e.status] = (statusCounts[e.status] || 0) + 1; });
+        const anomalies = detectAnomalies(parsed.entries);
         const doc = await Analysis.create({
           userId: req.userId, filename: filename || 'pasted-logs', format: parsed.format,
-          total: parsed.entries.length, suspiciousCount: bad.size, statusCounts,
+          total: parsed.entries.length, suspiciousCount: bad.size, statusCounts, anomalies,
           entries: parsed.entries.slice(0, 500).map((e) => ({ ...e, suspicious: bad.has(e.ip) })), intel,
         });
         res.json(doc);

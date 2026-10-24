@@ -130,6 +130,18 @@ export default function App() {
           <div className="card stat"><b>{result.intel.length}</b><span>IPs checked</span></div>
           <div className="card stat"><b style={{ color: '#ef4444' }}>{result.suspiciousCount}</b><span>Suspicious IPs</span></div>
         </div>
+
+        {(result.anomalies || []).length > 0 && (
+          <div className="card">
+            <h2>Anomalies detected</h2>
+            {result.anomalies.map((a, i) => (
+              <div key={i} style={{ padding: 8, borderLeft: '4px solid ' + (a.severity === 'HIGH' ? '#ef4444' : '#eab308'), marginBottom: 6 }}>
+                <b>{a.severity}</b> · {a.type} · {a.ip} · {a.detail}
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="charts">
           <div className="card"><h2>Status codes</h2><ResponsiveContainer width="100%" height={220}>
             <PieChart><Pie data={statusData} dataKey="value" nameKey="name" outerRadius={80} label>

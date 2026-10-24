@@ -9,4 +9,5 @@ module.exports = mongoose.model('Analysis', new mongoose.Schema({
   statusCounts: mongoose.Schema.Types.Mixed,
   entries: [mongoose.Schema.Types.Mixed],
   intel: [mongoose.Schema.Types.Mixed],
+  anomalies: [mongoose.Schema.Types.Mixed],
 }, { timestamps: true }));
