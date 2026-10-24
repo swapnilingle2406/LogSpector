@@ -8,12 +8,18 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { execFile } = require('child_process'); // execFile is safer than exec (no shell injection)
+const rateLimit = require('express-rate-limit');
 const User = require('./models/User');
 const Analysis = require('./models/Analysis');
 
 const app = express();
+app.set('trust proxy', 1); // needed when deployed on Render, harmless locally
 app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173' }));
 app.use(express.json({ limit: '5mb' }));
+
+// Rate limits: block password guessing and protect your free API quotas
+app.use('/api/auth', rateLimit({ windowMs: 15 * 60 * 1000, max: 20, message: { error: 'Too many attempts, try later' } }));
+app.use('/api/analyze', rateLimit({ windowMs: 60 * 1000, max: 10, message: { error: 'Max 10 analyses per minute' } }));
 
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('MongoDB connected'))
@@ -35,6 +41,8 @@ function auth(req, res, next) {
 app.post('/api/auth/signup', async (req, res) => {
   try {
     const { email, password } = req.body;
+    if (typeof email !== 'string' || typeof password !== 'string')
+      return res.status(400).json({ error: 'Invalid input' });
     if (!email || !password || password.length < 6)
       return res.status(400).json({ error: 'Email and a password of 6+ characters required' });
     if (await User.findOne({ email })) return res.status(400).json({ error: 'Email already registered' });
@@ -45,8 +53,10 @@ app.post('/api/auth/signup', async (req, res) => {
 
 app.post('/api/auth/login', async (req, res) => {
   try {
+    if (typeof req.body.email !== 'string' || typeof req.body.password !== 'string')
+      return res.status(400).json({ error: 'Invalid input' });
     const user = await User.findOne({ email: req.body.email });
-    if (!user || !(await user.comparePassword(req.body.password || '')))
+    if (!user || !(await user.comparePassword(req.body.password)))
       return res.status(401).json({ error: 'Wrong email or password' });
     res.json({ token: sign(user), email: user.email });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -63,7 +73,7 @@ async function lookup(ip) {
       });
       out.abuseScore = r.data.data.abuseConfidenceScore;
     }
-  } catch (e) { /* private IP or rate limit: leave null */ }
+  } catch (e) { /* private IP or rate limit: null */ }
   try {
     if (process.env.VIRUSTOTAL_KEY) {
       const r = await axios.get(`https://www.virustotal.com/api/v3/ip_addresses/${ip}`, {
@@ -79,14 +89,14 @@ async function lookup(ip) {
 // ---------- Analyze ----------
 app.post('/api/analyze', auth, (req, res) => {
   const { logs, filename } = req.body;
-  if (!logs || !logs.trim()) return res.status(400).json({ error: 'No logs provided' });
+  if (typeof logs !== 'string' || !logs.trim()) return res.status(400).json({ error: 'No logs provided' });
 
   const tmp = path.join(os.tmpdir(), `logspector-${Date.now()}.log`);
   fs.writeFileSync(tmp, logs);
   const script = path.join(__dirname, '..', 'parser-service', 'main.py');
 
   execFile(process.env.PYTHON_CMD || 'python', [script, tmp],
-    { maxBuffer: 20 * 1024 * 1024 }, async (err, stdout) => {
+    { maxBuffer: 20 * 1024 * 1024, timeout: 20000 }, async (err, stdout) => {
       fs.unlink(tmp, () => {});
       if (err) return res.status(500).json({ error: 'Parser failed: ' + err.message });
       try {
