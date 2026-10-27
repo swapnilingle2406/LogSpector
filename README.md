@@ -7,6 +7,7 @@ Live demo: https://log-spector.vercel.app
 <img width="1350" height="630" alt="image" src="https://github.com/user-attachments/assets/8904f25b-a38c-46e6-a4d7-97c7f222b439" />
 
 
+
 A web-based log analysis dashboard for security analysts. Paste or upload raw logs, get them parsed automatically, enrich the IP addresses with threat intelligence, and see suspicious activity flagged on a dashboard.
 
 > The live demo runs on free hosting. If the first request takes about a minute, the backend is waking up from sleep.
