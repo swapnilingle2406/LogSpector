@@ -4,6 +4,7 @@ const cors = require('cors');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
+const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -60,6 +61,58 @@ app.post('/api/auth/login', async (req, res) => {
     if (!user || !(await user.comparePassword(req.body.password)))
       return res.status(401).json({ error: 'Wrong email or password' });
     res.json({ token: sign(user), email: user.email });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ---------- Forgot / reset password ----------
+async function sendResetEmail(to, link) {
+  await axios.post('https://api.brevo.com/v3/smtp/email', {
+    sender: { name: 'LogSpector', email: process.env.MAIL_FROM },
+    to: [{ email: to }],
+    subject: 'Reset your LogSpector password',
+    htmlContent: `<p>Click the link below to choose a new password. It expires in 15 minutes.</p>
+      <p><a href="${link}">${link}</a></p>
+      <p>If you did not ask for this, you can ignore this email.</p>`,
+  }, {
+    headers: { 'api-key': process.env.BREVO_API_KEY, 'content-type': 'application/json' },
+    timeout: 10000,
+  });
+}
+
+app.post('/api/auth/forgot', async (req, res) => {
+  // Same answer whether or not the email exists, so nobody can check who has an account
+  const generic = { message: 'If that email is registered, a reset link has been sent.' };
+  try {
+    if (typeof req.body.email !== 'string') return res.status(400).json({ error: 'Invalid input' });
+    const user = await User.findOne({ email: req.body.email.toLowerCase().trim() });
+    if (user) {
+      const token = crypto.randomBytes(32).toString('hex');
+      user.resetTokenHash = crypto.createHash('sha256').update(token).digest('hex');
+      user.resetTokenExpires = new Date(Date.now() + 15 * 60 * 1000);
+      await user.save();
+      const base = (process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/$/, '');
+      await sendResetEmail(user.email, `${base}/?reset=${token}`);
+    }
+    res.json(generic);
+  } catch (e) {
+    console.error('Forgot password error:', e.response?.data || e.message);
+    res.json(generic);
+  }
+});
+
+app.post('/api/auth/reset', async (req, res) => {
+  try {
+    const { token, password } = req.body;
+    if (typeof token !== 'string' || typeof password !== 'string' || password.length < 6)
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    const hash = crypto.createHash('sha256').update(token).digest('hex');
+    const user = await User.findOne({ resetTokenHash: hash, resetTokenExpires: { $gt: new Date() } });
+    if (!user) return res.status(400).json({ error: 'Reset link is invalid or expired' });
+    user.password = password;
+    user.resetTokenHash = undefined;
+    user.resetTokenExpires = undefined;
+    await user.save();
+    res.json({ message: 'Password updated. You can log in now.' });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

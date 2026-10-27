@@ -9,7 +9,8 @@ const COLORS = ['#22c55e', '#16a34a', '#eab308', '#f97316', '#ef4444', '#38bdf8'
 
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem('token'));
-  const [mode, setMode] = useState('login');
+  const [resetToken, setResetToken] = useState(new URLSearchParams(window.location.search).get('reset'));
+  const [mode, setMode] = useState(resetToken ? 'reset' : 'login');
   const [form, setForm] = useState({ email: '', password: '' });
   const [logs, setLogs] = useState('');
   const [filename, setFilename] = useState('');
@@ -20,6 +21,7 @@ export default function App() {
   const [search, setSearch] = useState('');
   const [onlyBad, setOnlyBad] = useState(false);
   const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
   const [loading, setLoading] = useState(false);
 
   const cfg = { headers: { Authorization: `Bearer ${token}` } };
@@ -30,13 +32,36 @@ export default function App() {
   };
   useEffect(() => { if (token) loadHistory(); }, [token]); // eslint-disable-line
 
+  const goMode = (m) => { setMode(m); setError(''); setInfo(''); };
+
   const submitAuth = async () => {
-    setError('');
+    setError(''); setInfo('');
     try {
       const { data } = await axios.post(`${API}/api/auth/${mode}`, form);
       localStorage.setItem('token', data.token); setToken(data.token);
     } catch (e) { setError(e.response?.data?.error || 'Server not reachable'); }
   };
+
+  const sendReset = async () => {
+    setError(''); setInfo('');
+    try {
+      const { data } = await axios.post(`${API}/api/auth/forgot`, { email: form.email });
+      setInfo(data.message);
+    } catch (e) { setError(e.response?.data?.error || 'Server not reachable'); }
+  };
+
+  const saveNewPassword = async () => {
+    setError(''); setInfo('');
+    try {
+      const { data } = await axios.post(`${API}/api/auth/reset`, { token: resetToken, password: form.password });
+      window.history.replaceState({}, '', window.location.pathname); // remove ?reset=... from the address bar
+      setResetToken(null);
+      setForm({ email: form.email, password: '' });
+      setMode('login');
+      setInfo(data.message);
+    } catch (e) { setError(e.response?.data?.error || 'Server not reachable'); }
+  };
+
   const logout = () => { localStorage.removeItem('token'); setToken(null); setResult(null); };
 
   const onFile = (e) => {
@@ -90,18 +115,41 @@ export default function App() {
     doc.save('logspector.pdf');
   };
 
-  if (!token) return (
+  // ---------- Login / signup / forgot / reset screen ----------
+  if (!token || mode === 'reset') return (
     <div className="wrap" style={{ maxWidth: 400 }}>
       <h1>LogSpector</h1>
       <div className="card">
-        <h2>{mode === 'login' ? 'Log in' : 'Sign up'}</h2>
+        <h2>
+          {mode === 'login' && 'Log in'}
+          {mode === 'signup' && 'Sign up'}
+          {mode === 'forgot' && 'Forgot password'}
+          {mode === 'reset' && 'Choose a new password'}
+        </h2>
         {error && <div className="err">{error}</div>}
-        <input placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-        <input placeholder="Password (6+ chars)" type="password" value={form.password}
-          onChange={(e) => setForm({ ...form, password: e.target.value })} />
-        <button onClick={submitAuth}>{mode === 'login' ? 'Log in' : 'Create account'}</button>
-        <button className="ghost" onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}>
-          {mode === 'login' ? 'Need an account?' : 'Have an account?'}</button>
+        {info && <div style={{ color: '#22c55e', marginBottom: 10 }}>{info}</div>}
+
+        {(mode === 'login' || mode === 'signup') && (<>
+          <input placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+          <input placeholder="Password (6+ chars)" type="password" value={form.password}
+            onChange={(e) => setForm({ ...form, password: e.target.value })} />
+          <button onClick={submitAuth}>{mode === 'login' ? 'Log in' : 'Create account'}</button>
+          <button className="ghost" onClick={() => goMode(mode === 'login' ? 'signup' : 'login')}>
+            {mode === 'login' ? 'Need an account?' : 'Have an account?'}</button>
+          {mode === 'login' && <button className="ghost" onClick={() => goMode('forgot')}>Forgot password?</button>}
+        </>)}
+
+        {mode === 'forgot' && (<>
+          <input placeholder="Your account email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+          <button onClick={sendReset}>Send reset link</button>
+          <button className="ghost" onClick={() => goMode('login')}>Back to log in</button>
+        </>)}
+
+        {mode === 'reset' && (<>
+          <input placeholder="New password (6+ chars)" type="password" value={form.password}
+            onChange={(e) => setForm({ ...form, password: e.target.value })} />
+          <button onClick={saveNewPassword}>Save new password</button>
+        </>)}
       </div>
     </div>
   );
